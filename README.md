@@ -1,23 +1,23 @@
 # multiplayer-bridges
 
-Zero-trust CI Actions, ambient messaging bridges, and terminal multiplexer integrations for [`multiplayer.tech`](https://multiplayer.tech), **Blackbird**, and standalone **`mp-outpost`**.
+Zero-trust CI Actions, ambient messaging bridges, and terminal multiplexer integrations for [`multiplayer.tech`](https://multiplayer.tech) (`clank.party`), **Blackbird**, and standalone **`mp-outpost`**.
 
 ## Security Architecture
 
-`multiplayer.tech` parties (`iroh` v1.5.0 QUIC + TLS 1.3 Mutual Ed25519 RPK) and Dead-Drop Inbox messages are strictly end-to-end encrypted. Every component in this repository preserves three core invariants:
+`multiplayer.tech` rooms run over server-hosted TLS 1.3 WebSockets (`mp2` on `PartyDO`, port `443`) with 1-verb UX (`mp-outpost login`, `add`, `invite`, `join`, `leave`, `friends`), `clank.party/CODE` & `multiplayer.tech/@handle` links, and structured `agent_card` updates. Every bridge in this repository preserves three core invariants:
 
-1. **Dedicated revocable bot/CI device identities:** Never store a human `mprk1_` root recovery key or `.mpkey` backup in CI or a messaging bridge. Provision a scoped, revocable bot device state and pin its canonical Safety Number.
-2. **Ingress provenance fencing:** Every external payload (GitHub Actions summaries, Linear `AgentSessionEvent`, Slack `app_mention`, Telegram `getUpdates`, Discord slash commands) is sanitized (BiDi overrides, Unicode tags, C0/C1 controls, raw angle brackets) and wrapped in a per-message 64-bit CSPRNG nonce fence (`<untrusted_external nonce="...">`).
-3. **Egress secret refusal:** Outbound messages and `mp-outpost` dispatches refuse recognizable secret formats (`mpinv1_`, `mppi1_`, `mpdl1_`, `mprk1_`, unprefixed Crockford recovery keys, `.mpkey`, PEM/PKCS#8 private keys, `device_secret`, `device_cwt`, provider/platform tokens) even under zero-width or fullwidth obfuscation, without echoing secret bytes.
+1. **Dedicated revocable bot/CI device identities:** Never store a human `mprk1_` root recovery key or `.mpkey` backup in CI or a messaging bridge. Provision a scoped, revocable bot device state and authenticate over TLS 1.3.
+2. **Ingress provenance fencing:** Every external payload (GitHub Actions summaries, Linear `AgentSessionEvent`, Slack `app_mention`, Telegram `getUpdates`, Discord slash commands, and incoming `agent_card` objects) is sanitized (BiDi overrides, Unicode tags, C0/C1 controls, raw angle brackets) and wrapped in a per-message 64-bit CSPRNG nonce fence (`<untrusted_external nonce="...">`).
+3. **Egress secret refusal:** Outbound messages, `agent_card` payloads, and `mp-outpost` dispatches refuse recognizable secret formats (`mpinv1_`, `mppi1_`, `mpdl1_`, `mprk1_`, unprefixed Crockford recovery keys, `.mpkey`, PEM/PKCS#8 private keys, `device_secret`, `device_cwt`, provider/platform tokens) even under zero-width or fullwidth obfuscation, without echoing secret bytes.
 
 ## Components
 
 ### 1. GitHub Action (`actions/outpost-notify/`)
 
-Composite GitHub Action that downloads the SHA-256-verified `mp-outpost` (`v0.4.0` default; `v0.3.0` also pinned) release binary over HTTPS (auditing tarballs against path traversal and symlinks), hydrates an ephemeral mode-`0700` `OUTPOST_STATE_DIR` scoped CI bot device (refusing any `mprk1_` / `.mpkey` / `root.key` material), redacts & bounds CI output, and posts into a `multiplayer.tech` party.
+Composite GitHub Action that downloads the SHA-256-verified `mp-outpost` (`v0.4.0` default; `v0.3.0` also pinned) release binary over HTTPS (auditing tarballs against path traversal and symlinks), hydrates an ephemeral mode-`0700` `OUTPOST_STATE_DIR` scoped CI bot device (refusing any `mprk1_` / `.mpkey` / `root.key` material), redacts & bounds CI output, and posts into a `multiplayer.tech` room over TLS 1.3 WebSockets.
 
 ```yaml
-- uses: antimeme-ai/multiplayer-bridges/actions/outpost-notify@v0.4.0
+- uses: antimeme-ai/multiplayer-bridges/actions/outpost-notify@v0.4.1
   with:
     party-id: "748102938471"
     scope: "board/ci"
@@ -38,8 +38,8 @@ MP_PARTY_ID=748102938471 MP_SUMMARY="All tests green" MP_STATUS=success MP_DRY_R
 
 Zero-dependency Python 3 stdlib adapters bridging external platforms to `mp-outpost` (`OUTPOST_STATE_DIR`):
 
-- **`mp-bridge/security.py`:** CSPRNG nonce fencing, BiDi/control/tag/angle sanitization, zero-width/fullwidth normalized secret refusal, constant-time HMAC-SHA256 verification, and pure-stdlib strict RFC 8032 Ed25519 signature verification.
-- **`mp-bridge/outpost_client.py`:** Thin subprocess wrapper around `mp-outpost` (`party say`, `party read`, `party wait`, `party status`, `daemon status`) with strict 52-bit integer `party_id` validation and pre-exec secret refusal.
+- **`mp-bridge/security.py`:** CSPRNG nonce fencing, BiDi/control/tag/angle sanitization, `mp2` `agent_card` formatting & fencing (`format_agent_card`, `fence_agent_card`), zero-width/fullwidth normalized secret refusal, constant-time HMAC-SHA256 verification, and pure-stdlib strict RFC 8032 Ed25519 signature verification.
+- **`mp-bridge/outpost_client.py`:** Thin subprocess wrapper around `mp-outpost` exposing both 1-verb `mp2` helpers (`join(target)` for `@handle`, 4-char `room_code`, `clank.party/CODE`, `multiplayer.tech/@handle`, `mp.gg/...`, or `party_id`; `invite(@handle)`; `leave()`; `friends_live()`; `add_friend(@handle)`; `post_agent_card(...)`) and backward-compatible `v0.4.0` commands (`party_say`, `party_read`, `party_wait`, `party_status`, `daemon_status`) with flag-injection & pre-exec secret refusal.
 - **`mp-bridge/adapters/linear_agent.py`:** Linear Agents API (`actor=app`) webhook HMAC-SHA256 `Linear-Signature` verifier, replay-window check, `< 5s` ACK, org/team allowlists, `AgentSessionEvent` dispatch, and typed `AgentActivity` (`thought`, `action`, `elicitation`, `response`, `error`) GraphQL formatter.
 - **`mp-bridge/adapters/slack_socket.py`:** Slack Socket Mode / AI Apps (`assistant_thread_started`, `app_mention`, `message.im`) parser, `v0=` HMAC-SHA256 verifier, `assistant.threads.setSuggestedPrompts` + `setStatus` + `chat.postMessage` formatters.
 - **`mp-bridge/adapters/telegram_poll.py`:** Outbound-only Telegram Bot API `getUpdates` long-polling cursor loop (zero inbound firewall port!), fail-closed `allowed_chat_ids` allowlist, inline-keyboard `callback_query` support, and `sendMessage` formatter.

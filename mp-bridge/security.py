@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import unicodedata
-from typing import Optional
+from typing import Any, Optional, Sequence
 
 MAX_SAFE_ID = (1 << 53) - 1
 
@@ -197,6 +198,93 @@ def format_untrusted_envelope(
         f'<untrusted_external {attr_str}>\n'
         f"{safe_body}\n"
         f'</untrusted_external nonce="{nonce}">'
+    )
+
+
+def format_agent_card(
+    *,
+    title: str,
+    summary: str,
+    files: Optional[Sequence[str]] = None,
+    status: Optional[str] = None,
+    url: Optional[str] = None,
+) -> str:
+    """Format a compact, secret-checked `mp2` `agent_card` UTF-8 JSON payload."""
+    refuse_secrets(title, context="agent_card title")
+    refuse_secrets(summary, context="agent_card summary")
+    clean_title = title.strip()[:160]
+    clean_summary = summary.strip()[:2048]
+    if not clean_title:
+        raise ValueError("agent_card title must be non-empty")
+    if not clean_summary:
+        raise ValueError("agent_card summary must be non-empty")
+
+    card: dict[str, Any] = {
+        "kind": "agent_card",
+        "title": clean_title,
+        "summary": clean_summary,
+    }
+    if status is not None and status.strip():
+        refuse_secrets(status, context="agent_card status")
+        card["status"] = status.strip()[:64]
+    if files:
+        clean_files: list[str] = []
+        for f in files[:32]:
+            sf = str(f).strip()
+            if not sf:
+                continue
+            refuse_secrets(sf, context="agent_card file")
+            clean_files.append(sf[:256])
+        if clean_files:
+            card["files"] = clean_files
+    if url is not None and url.strip():
+        refuse_secrets(url, context="agent_card url")
+        u = url.strip()
+        if not (u.startswith("https://") or u.startswith("http://")):
+            raise ValueError("agent_card url must be http(s)")
+        card["url"] = u[:512]
+    return json.dumps(card, separators=(",", ":"), ensure_ascii=False)
+
+
+def fence_agent_card(
+    card_payload: str | dict[str, Any],
+    *,
+    source: str,
+    sender: str,
+    metadata: Optional[dict[str, str]] = None,
+) -> str:
+    """Sanitize an untrusted incoming `mp2` `agent_card` and wrap it in a CSPRNG nonce fence."""
+    if isinstance(card_payload, str):
+        try:
+            obj = json.loads(card_payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("agent_card payload must be valid JSON") from exc
+    elif isinstance(card_payload, dict):
+        obj = card_payload
+    else:
+        raise ValueError("agent_card payload must be JSON string or dict")
+    if not isinstance(obj, dict):
+        raise ValueError("agent_card payload must be a JSON object")
+
+    title = str(obj.get("title") or "Agent update")
+    summary = str(obj.get("summary") or "")
+    status = str(obj.get("status") or "")
+    raw_files = obj.get("files") if isinstance(obj.get("files"), list) else []
+    files = [str(f) for f in raw_files[:32]]
+
+    lines = [f"[agent_card] {title}" + (f" ({status})" if status else "")]
+    if summary:
+        lines.append(summary)
+    if files:
+        lines.append("Files: " + ", ".join(files))
+
+    merged_meta = dict(metadata or {})
+    merged_meta["kind"] = "agent_card"
+    return format_untrusted_envelope(
+        "\n".join(lines),
+        source=source,
+        sender=sender,
+        metadata=merged_meta,
     )
 
 

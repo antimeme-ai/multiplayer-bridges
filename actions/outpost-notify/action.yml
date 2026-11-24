@@ -1,5 +1,5 @@
 name: "multiplayer.tech Outpost CI Notify"
-description: "Post SHA-256-verified, secret-redacted CI build/test/PR summaries into an encrypted multiplayer.tech party using an ephemeral scoped mp-outpost CI bot device."
+description: "Post SHA-256-verified, secret-redacted CI build/test/PR summaries into a multiplayer.tech room over TLS 1.3 WebSockets using an ephemeral scoped mp-outpost CI bot device."
 branding:
   icon: "radio"
   color: "orange"
