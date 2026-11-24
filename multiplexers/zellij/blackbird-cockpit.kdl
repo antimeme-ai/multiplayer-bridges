@@ -1,0 +1,31 @@
+// Blackbird & multiplayer.tech Cockpit Layout for Zellij
+// Usage: zellij --layout /path/to/blackbird-cockpit.kdl
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="blackbird-cockpit" focus=true {
+        pane split_direction="vertical" {
+            // Primary coding cockpit: interactive Blackbird agent
+            pane name="blackbird" size="65%" focus=true {
+                command "blackbird"
+            }
+
+            // Right avionics stack: Flight Deck / Outpost status + operator shell
+            pane split_direction="horizontal" size="35%" {
+                pane name="outpost-status" size="45%" {
+                    command "sh"
+                    args "-c" "if command -v mp-outpost >/dev/null 2>&1; then mp-outpost doctor; else echo 'Install mp-outpost: curl -fsSL https://multiplayer.tech/install-outpost.sh | sh'; fi; exec \"${SHELL:-sh}\""
+                }
+                pane name="shell" size="55%"
+            }
+        }
+    }
+}

@@ -1,0 +1,61 @@
+name: "multiplayer.tech Outpost CI Notify"
+description: "Post SHA-256-verified, secret-redacted CI build/test/PR summaries into an encrypted multiplayer.tech party using an ephemeral scoped mp-outpost CI bot device."
+branding:
+  icon: "radio"
+  color: "orange"
+
+inputs:
+  party-id:
+    description: "Target 52-bit positive integer multiplayer.tech party ID."
+    required: true
+  scope:
+    description: "Party message scope (default: party/main; e.g. board/ci)."
+    required: false
+    default: "party/main"
+  title:
+    description: "Short CI notification title (e.g. workflow/PR name)."
+    required: false
+    default: ""
+  summary:
+    description: "CI build/test/PR summary text (bounded & secret-redacted; untrusted text is nonce-fenced)."
+    required: true
+  status:
+    description: "CI outcome label: success, failure, cancelled, or info."
+    required: false
+    default: "info"
+  outpost-version:
+    description: "Pinned mp-outpost GitHub Release tag (default: v0.4.0)."
+    required: false
+    default: "v0.4.0"
+  ci-state-b64:
+    description: "Base64-encoded scoped CI bot device state archive (NEVER a human mprk1_ root key!)."
+    required: false
+    default: ""
+  dry-run:
+    description: "When 'true', validate, fence, redact, and emit structured JSON without downloading or sending."
+    required: false
+    default: "false"
+
+outputs:
+  payload-json:
+    description: "Redacted, bounded structured notification JSON."
+    value: ${{ steps.notify.outputs.payload_json }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Run outpost-notify driver"
+      id: notify
+      shell: bash
+      env:
+        MP_PARTY_ID: ${{ inputs.party-id }}
+        MP_SCOPE: ${{ inputs.scope }}
+        MP_TITLE: ${{ inputs.title }}
+        MP_SUMMARY: ${{ inputs.summary }}
+        MP_STATUS: ${{ inputs.status }}
+        MP_OUTPOST_VERSION: ${{ inputs.outpost-version }}
+        MP_OUTPOST_CI_STATE: ${{ inputs.ci-state-b64 }}
+        MP_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        python3 "${{ github.action_path }}/notify.py"
