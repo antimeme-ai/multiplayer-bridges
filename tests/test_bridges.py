@@ -626,7 +626,7 @@ class TestOutpostNotifyAction(unittest.TestCase):
                 "MP_STATUS": "failure",
                 "MP_OUTPOST_VERSION": "v0.4.0",
                 "MP_DRY_RUN": "true",
-                "GITHUB_REPOSITORY": "antimemeai/blackbird",
+                "GITHUB_REPOSITORY": "antimeme-ai/blackbird",
                 "GITHUB_SHA": "abcdef1234567890",
                 "GITHUB_REF_NAME": "main",
             }

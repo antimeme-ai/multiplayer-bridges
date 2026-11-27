@@ -59,7 +59,7 @@ MAX_CI_STATE_BYTES = 1024 * 1024  # 1 MiB
 MAX_TAR_ENTRY_BYTES = 32 * 1024 * 1024  # 32 MiB
 MAX_TAR_TOTAL_BYTES = 64 * 1024 * 1024  # 64 MiB
 
-# Live verified SHA-256 hashes for antimemeai/multiplayer_outpost releases
+# Live verified SHA-256 hashes for antimeme-ai/multiplayer_outpost releases
 PINNED_SHA256: dict[str, dict[str, str]] = {
     "v0.4.0": {
         "darwin-arm64": "8c884c44a1d0df70e8c0b994f6b09c73d693ebde8b35f2309c56136b643b0add",
@@ -199,7 +199,7 @@ def download_verified_outpost(version: str, target: str, work_dir: Path) -> Path
     """Download mp-outpost release tarball over HTTPS, verify SHA-256, and extract safely."""
     v = validate_version(version)
     asset = f"mp-outpost-{v}-{target}.tar.gz"
-    base_url = f"https://github.com/antimemeai/multiplayer_outpost/releases/download/{v}"
+    base_url = f"https://github.com/antimeme-ai/multiplayer_outpost/releases/download/{v}"
     opener = urllib.request.build_opener(_SafeGitHubRedirectHandler())
 
     def _fetch(url: str) -> bytes:
